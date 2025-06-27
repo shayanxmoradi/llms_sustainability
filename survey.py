@@ -4,11 +4,9 @@ import os
 from dotenv import load_dotenv
 import argparse  # Import the argparse library
 
-# Import API libraries
 import openai
 import anthropic
 
-# Load API keys from .env file in the same directory
 load_dotenv()
 
 class LLMClient:
@@ -40,9 +38,7 @@ class LLMClient:
             raise ValueError(f"Model {self.model_name} not supported by this client.")
 
     def get_response(self, system_prompt: str, user_prompt: str) -> str:
-        """
-        Gets a response from the configured LLM.
-        """
+
         print("--------------------------------------------------")
         print(f"Sending request to {self.model_name}...")
         print("--------------------------------------------------")
@@ -144,8 +140,6 @@ def get_system_prompt(culture_type: CultureType, likert_scale: list, main_questi
 
     return f"{culture_description}\n\n{task_instruction}"
 
-# All survey functions (run_presor_survey, run_aispi_survey, etc.) remain the same...
-# (The full survey functions are omitted here for brevity but should be in your script)
 def run_presor_survey(client: LLMClient, culture: CultureType):
     statements = [
         "Social responsibility and profitability can be compatible.",
@@ -372,33 +366,25 @@ def save_results_to_excel(results, filename="survey_results.xlsx"):
 
 
 if __name__ == '__main__':
-    # --- THIS IS THE NEW SECTION FOR COMMAND-LINE ARGUMENTS ---
 
-    # Define available choices for the command-line arguments
     model_choices = [m.value for m in ModelType]
     culture_choices = [c.value for c in CultureType]
     survey_choices = ["PRESOR", "AISPI", "SDG17", "SDG18", "SDG19", "AQ1", "AQ2_3"]
 
-    # Set up the argument parser
     parser = argparse.ArgumentParser(description="Run LLM sustainability surveys with different models and cultural personas.")
     parser.add_argument("--model", required=True, choices=model_choices, help="The LLM to use.")
     parser.add_argument("--culture", required=True, choices=culture_choices, help="The cultural persona for the LLM.")
     parser.add_argument("--survey", required=True, choices=survey_choices, help="The survey to run.")
     parser.add_argument("--output_file", default="llm_sustainability_results.xlsx", help="The name of the output Excel file.")
 
-    # Parse the arguments from the command line
     args = parser.parse_args()
 
-    # --- Execution ---
     try:
-        # Convert string arguments back to Enum types for the function call
         selected_model = ModelType(args.model)
         selected_culture = CultureType(args.culture)
 
-        # Run the selected survey
         survey_results = run_survey(selected_model, selected_culture, args.survey)
 
-        # Save the results to the specified Excel file
         save_results_to_excel(survey_results, filename=args.output_file)
 
     except ValueError as e:
