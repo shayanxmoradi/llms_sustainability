@@ -90,38 +90,26 @@ def get_system_prompt(culture_type: CultureType, likert_scale: list, main_questi
         CultureType.CLAN: (
             "You are an employee of an organization with a Clan culture. "
             "This type of organization has an internal focus and values flexibility. "
-            "It is structured like a family, emphasizing collaboration, trust, and strong employee commitment. "
-            "Assume that organizational members behave properly when they feel trusted and committed to the organization. "
-            "Your responses should reflect a culture that values participation, loyalty, teamwork, support, employee involvement, and engagement. "
-            "Leaders in your organization are like mentors or parental figures. "
-            "Decisions prioritize maintaining a friendly and supportive internal climate."
+            "It is structured like a family, emphasizing cooperation, trust, and employee commitment. "
+            "Your responses should reflect a culture that values cooperation, involvement, teamwork, trust and care for employees."
         ),
         CultureType.ADHOCRACY: (
-            "You are a representative of an organization with an Adhocracy culture. "
+            "You are an employee of an organization with an Adhocracy culture. "
             "This type of organization has an external focus and values flexibility. "
             "It is a dynamic, entrepreneurial, and innovative environment with an emphasis on risk-taking and experimentation. "
-            "Assume that organizational members behave properly when they view their work as meaningful and impactful. "
-            "Your responses should reflect a culture that values autonomy, growth, and stimulation, with associated behaviors like creativity and risk-taking. "
-            "Leaders in your organization are visionary, innovative, and willing to take risks. "
-            "Success is defined by innovation, growth, and cutting-edge output, and the organization is seen as effective when employees are innovating."
+            "Your responses should reflect a culture that values innovation, empowerment, autonomy, risk-taking and creativity. "
         ),
         CultureType.MARKET: (
-            "You are responding as a representative of an organization with a Market culture. "
+            "You are an employee of an organization with a Market culture. "
             "This type of organization has an external focus and values stability. "
             "It is a results-driven, competitive atmosphere with a focus on goal achievement, productivity, and market share. "
-            "Assume that organizational members behave properly when they have clear goals and are rewarded for their performance. "
-            "Your responses should reflect a culture that values rivalry, achievement, and competence, and behaviors such as being aggressive and competing with other companies. "
-            "Leaders in your organization are hard drivers, producers, and competitors. "
-            "Success is defined by winning in the marketplace and by increasing profits and market share."
+            "Your responses should reflect a culture that values achievement, performance, work pressure, recognition and goal-orientation."
         ),
         CultureType.HIERARCHY: (
-            "You are responding as a representative of an organization with a Hierarchy culture. "
+            "You are an employee of an organization with a Hierarchy culture. "
             "This type of organization has an internal focus and values stability. "
             "It is a formalized, structured, and rule-driven environment with an emphasis on efficiency, consistency, and predictability. "
-            "Assume that organizational members behave properly when there are clear roles, rules, and regulations. "
-            "Your responses should reflect a culture that values formalization, routinization, and consistency, with associated behaviors like conformity and predictability. "
-            "Leaders in your organization are coordinators, monitors, and organizers. "
-            "Success is measured by smooth operations and efficiency."
+            "Your responses should reflect a culture that values structure, role clarity, ethical aspects, safety and control."
         )
     }
 
@@ -213,6 +201,22 @@ def run_aispi_survey(client: LLMClient, culture: CultureType, repeats: int):
 
 
 
+def run_GSCS_survey(client: LLMClient, culture: CultureType, repeats: int):
+    statements = [
+         "It is important to develop a mutual understanding of responsibilities regarding environmental performance with our suppliers",
+         "It is important to work together to reduce environmental impact of our activities with our suppliers",
+         "It is important to conduct joint planning to anticipate and resolve environmental-related problems with our suppliers",
+         "It is important to make joint decisions about ways to reduce overall environmental impact of our products with our suppliers",
+         "It is important to develop a mutual understanding of responsibilities regarding environmental performance with our customers",
+         "It is important to work together to reduce environmental impact of our activities with our customers",
+         "It is important to conduct joint planning to anticipate and resolve environmental-related problems with our customers",
+         "It is important to make joint decisions about ways to reduce overall environmental impact of our products with our customers"
+    ]
+    likert_scale = ['Strongly Disagree', 'Disagree', 'Somewhat Disagree', 'Neutral', 'Somewhat Agree', 'Agree', 'Strongly Agree']
+    system_prompt = get_system_prompt(culture, likert_scale)
+    return _execute_questions(client, culture, "GSCS", statements, system_prompt, repeats)
+
+
 def run_sdg17_survey(client: LLMClient, culture: CultureType, repeats: int):
     areas = ["Global poverty", "World hunger", "Public health", "Education", "Gender equality", "Water security",
              "Renewable energies", "Economic growth", "Innovative industries", "Social inequality",
@@ -286,7 +290,7 @@ def run_additional_questions_2_3(client: LLMClient, culture: CultureType, repeat
 def run_survey(model: ModelType, culture: CultureType, survey_name: str, repeats: int):
     client = LLMClient(model)
     survey_functions = {
-        "PRESOR": run_presor_survey, "AISPI": run_aispi_survey, "SDG17": run_sdg17_survey,
+        "PRESOR": run_presor_survey, "AISPI": run_aispi_survey, "GSCS": run_GSCS_survey, "SDG17": run_sdg17_survey,
         "SDG18": run_sdg18_survey, "SDG19": run_sdg19_survey, "AQ1": run_additional_question_1,
         "AQ2_3": run_additional_questions_2_3,
     }
@@ -325,7 +329,7 @@ if __name__ == '__main__':
     parser.add_argument("--culture", required=True, choices=[c.value for c in CultureType],
                         help="The cultural persona for the LLM.")
     parser.add_argument("--survey", required=True,
-                        choices=["PRESOR", "AISPI", "SDG17", "SDG18", "SDG19", "AQ1", "AQ2_3"],
+                        choices=["PRESOR", "AISPI", 'GSCS', "SDG17", "SDG18", "SDG19", "AQ1", "AQ2_3"],
                         help="The survey to run.")
     parser.add_argument("--repeats", type=int, default=1, help="Number of times to repeat each question.")
     parser.add_argument("--output_file", default="llm_sustainability_results.xlsx",
