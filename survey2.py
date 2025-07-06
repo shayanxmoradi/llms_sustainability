@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import argparse
 import time
 
-# --- Load Environment Variables
+# --- Load Environment Variables ---
 load_dotenv()
 
 #  API Libraries
@@ -23,6 +23,7 @@ class LLMClient:
         self.model_name = model_type.value
         api_key_map = {
             ModelType.GPT_4o: ("OPENAI_API_KEY", "OpenAI"),
+            ModelType.GPT_4o_MINI: ("OPENAI_API_KEY", "OpenAI"),
             ModelType.CLAUDE_3_7_SONNET: ("ANTHROPIC_API_KEY", "Anthropic"),
             ModelType.DEEPSEEK_V2: ("DEEPSEEK_API_KEY", "DeepSeek"),
         }
@@ -31,7 +32,7 @@ class LLMClient:
         if not self.api_key:
             raise ValueError(f"API key for {provider_name} not found. Please add {env_key} to your .env file.")
 
-        if self.model_type == ModelType.GPT_4o:
+        if self.model_type in [ModelType.GPT_4o, ModelType.GPT_4o_MINI]:
             self.client = openai.OpenAI(api_key=self.api_key)
         elif self.model_type == ModelType.CLAUDE_3_7_SONNET:
             self.client = anthropic.Anthropic(api_key=self.api_key)
@@ -43,7 +44,7 @@ class LLMClient:
         Gets a single response from the configured LLM.
         """
         try:
-            if self.model_type in [ModelType.GPT_4o, ModelType.DEEPSEEK_V2]:
+            if self.model_type in [ModelType.GPT_4o, ModelType.GPT_4o_MINI, ModelType.DEEPSEEK_V2]:
                 response = self.client.chat.completions.create(
                     model=self.model_name,
                     messages=[
@@ -51,7 +52,7 @@ class LLMClient:
                         {"role": "user", "content": user_prompt}
                     ],
                     max_tokens=50,
-                    temperature=0.7,  # todo no temp change
+                    temperature=0.7,
                 )
                 return response.choices[0].message.content.strip()
 
@@ -69,7 +70,7 @@ class LLMClient:
         except Exception as e:
             print(f"    ! API Error: {e}. Waiting 5 seconds before retrying...")
             time.sleep(5)
-            return f"API_ERROR"
+            return "API_ERROR"
 
 
 class CultureType(Enum):
@@ -81,6 +82,7 @@ class CultureType(Enum):
 
 class ModelType(Enum):
     GPT_4o = "gpt-4o"
+    GPT_4o_MINI = "gpt-4o-mini"
     CLAUDE_3_7_SONNET = "claude-3-5-sonnet-20240620"
     DEEPSEEK_V2 = "deepseek-chat"
 
@@ -90,38 +92,26 @@ def get_system_prompt(culture_type: CultureType, likert_scale: list, main_questi
         CultureType.CLAN: (
             "You are an employee of an organization with a Clan culture. "
             "This type of organization has an internal focus and values flexibility. "
-            "It is structured like a family, emphasizing collaboration, trust, and strong employee commitment. "
-            "Assume that organizational members behave properly when they feel trusted and committed to the organization. "
-            "Your responses should reflect a culture that values participation, loyalty, teamwork, support, employee involvement, and engagement. "
-            "Leaders in your organization are like mentors or parental figures. "
-            "Decisions prioritize maintaining a friendly and supportive internal climate."
+            "It is structured like a family, emphasizing cooperation, trust, and employee commitment. "
+            "Your responses should reflect a culture that values cooperation, involvement, teamwork, trust and care for employees."
         ),
         CultureType.ADHOCRACY: (
-            "You are a representative of an organization with an Adhocracy culture. "
+            "You are an employee of an organization with an Adhocracy culture. "
             "This type of organization has an external focus and values flexibility. "
             "It is a dynamic, entrepreneurial, and innovative environment with an emphasis on risk-taking and experimentation. "
-            "Assume that organizational members behave properly when they view their work as meaningful and impactful. "
-            "Your responses should reflect a culture that values autonomy, growth, and stimulation, with associated behaviors like creativity and risk-taking. "
-            "Leaders in your organization are visionary, innovative, and willing to take risks. "
-            "Success is defined by innovation, growth, and cutting-edge output, and the organization is seen as effective when employees are innovating."
+            "Your responses should reflect a culture that values innovation, empowerment, autonomy, risk-taking and creativity. "
         ),
         CultureType.MARKET: (
-            "You are responding as a representative of an organization with a Market culture. "
+            "You are an employee of an organization with a Market culture. "
             "This type of organization has an external focus and values stability. "
             "It is a results-driven, competitive atmosphere with a focus on goal achievement, productivity, and market share. "
-            "Assume that organizational members behave properly when they have clear goals and are rewarded for their performance. "
-            "Your responses should reflect a culture that values rivalry, achievement, and competence, and behaviors such as being aggressive and competing with other companies. "
-            "Leaders in your organization are hard drivers, producers, and competitors. "
-            "Success is defined by winning in the marketplace and by increasing profits and market share."
+            "Your responses should reflect a culture that values achievement, performance, work pressure, recognition and goal-orientation."
         ),
         CultureType.HIERARCHY: (
-            "You are responding as a representative of an organization with a Hierarchy culture. "
+            "You are an employee of an organization with a Hierarchy culture. "
             "This type of organization has an internal focus and values stability. "
             "It is a formalized, structured, and rule-driven environment with an emphasis on efficiency, consistency, and predictability. "
-            "Assume that organizational members behave properly when there are clear roles, rules, and regulations. "
-            "Your responses should reflect a culture that values formalization, routinization, and consistency, with associated behaviors like conformity and predictability. "
-            "Leaders in your organization are coordinators, monitors, and organizers. "
-            "Success is measured by smooth operations and efficiency."
+            "Your responses should reflect a culture that values structure, role clarity, ethical aspects, safety and control."
         )
     }
 
@@ -143,35 +133,31 @@ def get_system_prompt(culture_type: CultureType, likert_scale: list, main_questi
     return f"{culture_description}\n\n{task_instruction}"
 
 
-# --- Helper function for running questions with repeats ---
 def _execute_questions(client: LLMClient, culture: CultureType, survey_name: str, questions: list, system_prompt: str,
-                       repeats: int):
+                       run_number: int):
     results = []
     total_questions = len(questions)
     for i, question_text in enumerate(questions, 1):
-        print(f"\n[Question {i}/{total_questions}]──> {question_text}")
-        for j in range(1, repeats + 1):
-            print(f"  - Repetition {j}/{repeats}...")
+        print(f"  [Question {i}/{total_questions}]──> {question_text}")
+        response = client.get_response(system_prompt, question_text)
+
+        while response == "API_ERROR":
+            print("  Retrying last request...")
             response = client.get_response(system_prompt, question_text)
 
-            # Simple retry logic for API errors
-            while response == "API_ERROR":
-                response = client.get_response(system_prompt, question_text)
-
-            print(f"    > Received response: '{response}'")
-            results.append({
-                "model": client.model_name,
-                "culture": culture.value,
-                "survey": survey_name,
-                "question": question_text,
-                "repetition": j,
-                "response": response
-            })
+        print(f"    > Received response: '{response}'")
+        results.append({
+            "model": client.model_name,
+            "culture": culture.value,
+            "survey": survey_name,
+            "question": question_text,
+            "run_number": run_number,
+            "response": response
+        })
     return results
 
 
-# --- Simplified Survey Functions ---
-def run_presor_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_presor_survey(client: LLMClient, culture: CultureType, run_number: int):
     statements = [
         "Social responsibility and profitability can be compatible.",
         "To remain competitive in a global environment, business firms will have to disregard ethics and social responsibility.",
@@ -190,10 +176,10 @@ def run_presor_survey(client: LLMClient, culture: CultureType, repeats: int):
     likert_scale = ['Strongly Disagree', 'Disagree', 'Somewhat Disagree', 'Slightly Disagree', 'Neutral',
                     'Slightly Agree', 'Somewhat Agree', 'Agree', 'Strongly Agree']
     system_prompt = get_system_prompt(culture, likert_scale)
-    return _execute_questions(client, culture, "PRESOR", statements, system_prompt, repeats)
+    return _execute_questions(client, culture, "PRESOR", statements, system_prompt, run_number)
 
 
-def run_aispi_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_aispi_survey(client: LLMClient, culture: CultureType, run_number: int):
     statements = [
         "AI can help optimize resource use and reduce waste.", "AI will create more jobs than it will eliminate.",
         "The energy consumption of AI systems could hinder sustainability efforts.",
@@ -209,11 +195,27 @@ def run_aispi_survey(client: LLMClient, culture: CultureType, repeats: int):
     ]
     likert_scale = ['Strongly Disagree', 'Disagree', 'Somewhat Disagree', 'Somewhat Agree', 'Agree', 'Strongly Agree']
     system_prompt = get_system_prompt(culture, likert_scale)
-    return _execute_questions(client, culture, "AISPI", statements, system_prompt, repeats)
+    return _execute_questions(client, culture, "AISPI", statements, system_prompt, run_number)
 
 
+def run_GSCS_survey(client: LLMClient, culture: CultureType, run_number: int):
+    statements = [
+        "It is important to develop a mutual understanding of responsibilities regarding environmental performance with our suppliers",
+        "It is important to work together to reduce environmental impact of our activities with our suppliers",
+        "It is important to conduct joint planning to anticipate and resolve environmental-related problems with our suppliers",
+        "It is important to make joint decisions about ways to reduce overall environmental impact of our products with our suppliers",
+        "It is important to develop a mutual understanding of responsibilities regarding environmental performance with our customers",
+        "It is important to work together to reduce environmental impact of our activities with our customers",
+        "It is important to conduct joint planning to anticipate and resolve environmental-related problems with our customers",
+        "It is important to make joint decisions about ways to reduce overall environmental impact of our products with our customers"
+    ]
+    likert_scale = ['Strongly Disagree', 'Disagree', 'Somewhat Disagree', 'Neutral', 'Somewhat Agree', 'Agree',
+                    'Strongly Agree']
+    system_prompt = get_system_prompt(culture, likert_scale)
+    return _execute_questions(client, culture, "GSCS", statements, system_prompt, run_number)
 
-def run_sdg17_survey(client: LLMClient, culture: CultureType, repeats: int):
+
+def run_sdg17_survey(client: LLMClient, culture: CultureType, run_number: int):
     areas = ["Global poverty", "World hunger", "Public health", "Education", "Gender equality", "Water security",
              "Renewable energies", "Economic growth", "Innovative industries", "Social inequality",
              "Sustainable cities and communities", "Consumption and production", "Climate action", "Ocean protection",
@@ -222,79 +224,72 @@ def run_sdg17_survey(client: LLMClient, culture: CultureType, repeats: int):
                     'Positive impact', 'Very positive impact']
     main_question = "How do you think AI will impact the following areas in the next 10 years?"
     system_prompt = get_system_prompt(culture, likert_scale, main_question)
-    # For this survey, the "question" in the Excel file should include the main question
-    full_questions = [f"{main_question} - {area}" for area in areas]
 
-    # We pass the areas to the LLM but save the full question text
-    results_raw = _execute_questions(client, culture, "SDG17", areas, system_prompt, repeats)
-    for i, res in enumerate(results_raw):
-        original_area_index = i // repeats
-        res["question"] = full_questions[original_area_index]
-
-    return results_raw
+    results = _execute_questions(client, culture, "SDG17", areas, system_prompt, run_number)
+    for res in results:
+        res["question"] = f"{main_question} - {res['question']}"
+    return results
 
 
-def run_sdg18_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_sdg18_survey(client: LLMClient, culture: CultureType, run_number: int):
     question = "In your opinion, which of both transformations is more important? (AI vs. Sustainability)"
     likert_scale = ['1 – AI is much more important', '2 – AI is more important', '3 – AI is slightly more important',
                     '4 – Sustainability is slightly more important', '5 – Sustainability is more important',
                     '6 – Sustainability is much more important']
     system_prompt = get_system_prompt(culture, likert_scale, question)
-    return _execute_questions(client, culture, "SDG18", [question], system_prompt, repeats)
+    return _execute_questions(client, culture, "SDG18", [question], system_prompt, run_number)
 
 
-def run_sdg19_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_sdg19_survey(client: LLMClient, culture: CultureType, run_number: int):
     question = "Do you believe AI and sustainable development will become more integrated in the future?"
     likert_scale = ['Definitely not', 'Probably not', 'Possibly not', 'Possibly yes', 'Probably yes', 'Yes, for sure']
     system_prompt = get_system_prompt(culture, likert_scale, question)
-    return _execute_questions(client, culture, "SDG19", [question], system_prompt, repeats)
+    return _execute_questions(client, culture, "SDG19", [question], system_prompt, run_number)
 
 
-def run_additional_question_1(client: LLMClient, culture: CultureType, repeats: int):
+def run_additional_question_1(client: LLMClient, culture: CultureType, run_number: int):
     question = "Do you think governments, industries and organizations are doing enough to ensure AI and sustainable development go along with each other?"
     likert_scale = ['1 = Not at all', '2 = Slightly', '3 = Somewhat', '4 = Moderately', '5 = Mostly',
                     '6 = Yes, absolutely']
     system_prompt = get_system_prompt(culture, likert_scale, question)
-    return _execute_questions(client, culture, "Additional Question 1", [question], system_prompt, repeats)
+    return _execute_questions(client, culture, "Additional Question 1", [question], system_prompt, run_number)
 
 
-def run_additional_questions_2_3(client: LLMClient, culture: CultureType, repeats: int):
-    # This one is special and combines two question formats
+def run_additional_questions_2_3(client: LLMClient, culture: CultureType, run_number: int):
     results = []
     organizations = ["National universities", "International Research Organizations", "Technology companies",
                      "Government", "Non-governmental organizations (NGO)"]
 
-    # Question 2
     q2_main = "Who do you think is responsible to ensure AI advancement and sustainable development go along with each other?"
-    q2_questions = [f"{q2_main} - {org}" for org in organizations]
     q2_likert = ["Responsible", "Not Responsible"]
     q2_prompt = get_system_prompt(culture, q2_likert, "For each of the following, state if they are responsible...")
-    results.extend(_execute_questions(client, culture, "Additional Question 2", organizations, q2_prompt, repeats))
+    q2_results = _execute_questions(client, culture, "Additional Question 2", organizations, q2_prompt, run_number)
+    for res in q2_results:
+        res["question"] = f"{q2_main} - {res['question']}"
+    results.extend(q2_results)
 
-    # Question 3
     q3_main = "How much confidence do you have in the following to develop and use AI in the best interest of sustainable development?"
-    q3_questions = [f"{q3_main} - {org}" for org in organizations]
     q3_likert = ['1= Most likely', '2= Likely', '3=Somewhat likely', '4=Somewhat unlikely', '5=Unlikely',
                  '6=Definitely not']
     q3_prompt = get_system_prompt(culture, q3_likert, q3_main)
-    results.extend(_execute_questions(client, culture, "Additional Question 3", organizations, q3_prompt, repeats))
+    q3_results = _execute_questions(client, culture, "Additional Question 3", organizations, q3_prompt, run_number)
+    for res in q3_results:
+        res["question"] = f"{q3_main} - {res['question']}"
+    results.extend(q3_results)
 
     return results
 
 
-# --- Main Runner and File Saver  ---
-def run_survey(model: ModelType, culture: CultureType, survey_name: str, repeats: int):
-    client = LLMClient(model)
+def run_survey(client: LLMClient, culture: CultureType, survey_name: str, run_number: int):
     survey_functions = {
-        "PRESOR": run_presor_survey, "AISPI": run_aispi_survey, "SDG17": run_sdg17_survey,
+        "PRESOR": run_presor_survey, "AISPI": run_aispi_survey, "GSCS": run_GSCS_survey, "SDG17": run_sdg17_survey,
         "SDG18": run_sdg18_survey, "SDG19": run_sdg19_survey, "AQ1": run_additional_question_1,
         "AQ2_3": run_additional_questions_2_3,
     }
     if survey_name not in survey_functions:
         raise ValueError(f"Unknown survey: {survey_name}.")
 
-    # Pass repeats to the chosen function
-    results = survey_functions[survey_name](client, culture, repeats)
+    results = survey_functions[survey_name](client, culture, run_number)
     return results
 
 
@@ -318,40 +313,51 @@ def save_results_to_excel(results, filename="survey_results.xlsx"):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Run LLM sustainability surveys with repetitions.")
+    parser = argparse.ArgumentParser(description="Run LLM sustainability surveys with full survey repetitions.")
 
-    # Argument definitions
     parser.add_argument("--model", required=True, choices=[m.value for m in ModelType], help="The LLM to use.")
     parser.add_argument("--culture", required=True, choices=[c.value for c in CultureType],
                         help="The cultural persona for the LLM.")
     parser.add_argument("--survey", required=True,
-                        choices=["PRESOR", "AISPI", "SDG17", "SDG18", "SDG19", "AQ1", "AQ2_3"],
+                        choices=["PRESOR", "AISPI", 'GSCS', "SDG17", "SDG18", "SDG19", "AQ1", "AQ2_3"],
                         help="The survey to run.")
-    parser.add_argument("--repeats", type=int, default=1, help="Number of times to repeat each question.")
-    parser.add_argument("--output_file", default="llm_sustainability_results.xlsx",
-                        help="The name of the output Excel file.")
+    parser.add_argument("--runs", type=int, default=1, help="Number of times to repeat the entire survey.")
+    # The --output_file argument is removed.
 
     args = parser.parse_args()
 
-    # --- Execution ---
+    # --- MODIFIED SECTION START ---
+    # Sanitize model name for use in filename (replaces characters like '/' with '_')
+    sanitized_model_name = args.model.replace('/', '_')
+
+    # Dynamically generate the filename
+    output_filename = f"{sanitized_model_name}_{args.survey}_{args.culture}_{args.runs}runs.xlsx"
+    # --- MODIFIED SECTION END ---
+
     try:
         print("=" * 60)
-        print("🚀 STARTING SURVEY RUN")
+        print("🚀 INITIALIZING SURVEY SESSION")
         print(f"  - Model:         {args.model}")
         print(f"  - Culture:       {args.culture}")
         print(f"  - Survey:        {args.survey}")
-        print(f"  - Repetitions:   {args.repeats}")
-        print(f"  - Output File:   {args.output_file}")
+        print(f"  - Total Runs:    {args.runs}")
+        print(f"  - Output File:   {output_filename}")  # <-- MODIFIED
         print("=" * 60)
 
         selected_model = ModelType(args.model)
         selected_culture = CultureType(args.culture)
 
-        survey_results = run_survey(selected_model, selected_culture, args.survey, args.repeats)
+        all_results = []
+        client = LLMClient(selected_model)
 
-        save_results_to_excel(survey_results, filename=args.output_file)
+        for i in range(1, args.runs + 1):
+            print(f"\n--- Starting Run {i} of {args.runs} ---")
+            single_run_results = run_survey(client, selected_culture, args.survey, run_number=i)
+            all_results.extend(single_run_results)
+            print(f"--- Finished Run {i} of {args.runs} ---")
 
-        print("\n🎉 Run complete.")
+        save_results_to_excel(all_results, filename=output_filename)  # <-- MODIFIED
+        print("\n🎉 Session complete.")
 
     except (ValueError, KeyError) as e:
         print(f"\n❌ Error: {e}")
