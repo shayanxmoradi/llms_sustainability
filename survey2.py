@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import argparse
 import time
 
-# --- Load Environment Variables
+# --- Load Environment Variables ---
 load_dotenv()
 
 #  API Libraries
@@ -51,7 +51,7 @@ class LLMClient:
                         {"role": "user", "content": user_prompt}
                     ],
                     max_tokens=50,
-                    temperature=0.7,  # todo no temp change
+                    temperature=0.7,
                 )
                 return response.choices[0].message.content.strip()
 
@@ -69,7 +69,7 @@ class LLMClient:
         except Exception as e:
             print(f"    ! API Error: {e}. Waiting 5 seconds before retrying...")
             time.sleep(5)
-            return f"API_ERROR"
+            return "API_ERROR"
 
 
 class CultureType(Enum):
@@ -131,35 +131,31 @@ def get_system_prompt(culture_type: CultureType, likert_scale: list, main_questi
     return f"{culture_description}\n\n{task_instruction}"
 
 
-# --- Helper function for running questions with repeats ---
 def _execute_questions(client: LLMClient, culture: CultureType, survey_name: str, questions: list, system_prompt: str,
-                       repeats: int):
+                       run_number: int):
     results = []
     total_questions = len(questions)
     for i, question_text in enumerate(questions, 1):
-        print(f"\n[Question {i}/{total_questions}]──> {question_text}")
-        for j in range(1, repeats + 1):
-            print(f"  - Repetition {j}/{repeats}...")
+        print(f"  [Question {i}/{total_questions}]──> {question_text}")
+        response = client.get_response(system_prompt, question_text)
+
+        while response == "API_ERROR":
+            print("  Retrying last request...")
             response = client.get_response(system_prompt, question_text)
 
-            # Simple retry logic for API errors
-            while response == "API_ERROR":
-                response = client.get_response(system_prompt, question_text)
-
-            print(f"    > Received response: '{response}'")
-            results.append({
-                "model": client.model_name,
-                "culture": culture.value,
-                "survey": survey_name,
-                "question": question_text,
-                "repetition": j,
-                "response": response
-            })
+        print(f"    > Received response: '{response}'")
+        results.append({
+            "model": client.model_name,
+            "culture": culture.value,
+            "survey": survey_name,
+            "question": question_text,
+            "run_number": run_number,
+            "response": response
+        })
     return results
 
 
-# --- Simplified Survey Functions ---
-def run_presor_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_presor_survey(client: LLMClient, culture: CultureType, run_number: int):
     statements = [
         "Social responsibility and profitability can be compatible.",
         "To remain competitive in a global environment, business firms will have to disregard ethics and social responsibility.",
@@ -178,10 +174,10 @@ def run_presor_survey(client: LLMClient, culture: CultureType, repeats: int):
     likert_scale = ['Strongly Disagree', 'Disagree', 'Somewhat Disagree', 'Slightly Disagree', 'Neutral',
                     'Slightly Agree', 'Somewhat Agree', 'Agree', 'Strongly Agree']
     system_prompt = get_system_prompt(culture, likert_scale)
-    return _execute_questions(client, culture, "PRESOR", statements, system_prompt, repeats)
+    return _execute_questions(client, culture, "PRESOR", statements, system_prompt, run_number)
 
 
-def run_aispi_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_aispi_survey(client: LLMClient, culture: CultureType, run_number: int):
     statements = [
         "AI can help optimize resource use and reduce waste.", "AI will create more jobs than it will eliminate.",
         "The energy consumption of AI systems could hinder sustainability efforts.",
@@ -197,27 +193,27 @@ def run_aispi_survey(client: LLMClient, culture: CultureType, repeats: int):
     ]
     likert_scale = ['Strongly Disagree', 'Disagree', 'Somewhat Disagree', 'Somewhat Agree', 'Agree', 'Strongly Agree']
     system_prompt = get_system_prompt(culture, likert_scale)
-    return _execute_questions(client, culture, "AISPI", statements, system_prompt, repeats)
+    return _execute_questions(client, culture, "AISPI", statements, system_prompt, run_number)
 
 
-
-def run_GSCS_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_GSCS_survey(client: LLMClient, culture: CultureType, run_number: int):
     statements = [
-         "It is important to develop a mutual understanding of responsibilities regarding environmental performance with our suppliers",
-         "It is important to work together to reduce environmental impact of our activities with our suppliers",
-         "It is important to conduct joint planning to anticipate and resolve environmental-related problems with our suppliers",
-         "It is important to make joint decisions about ways to reduce overall environmental impact of our products with our suppliers",
-         "It is important to develop a mutual understanding of responsibilities regarding environmental performance with our customers",
-         "It is important to work together to reduce environmental impact of our activities with our customers",
-         "It is important to conduct joint planning to anticipate and resolve environmental-related problems with our customers",
-         "It is important to make joint decisions about ways to reduce overall environmental impact of our products with our customers"
+        "It is important to develop a mutual understanding of responsibilities regarding environmental performance with our suppliers",
+        "It is important to work together to reduce environmental impact of our activities with our suppliers",
+        "It is important to conduct joint planning to anticipate and resolve environmental-related problems with our suppliers",
+        "It is important to make joint decisions about ways to reduce overall environmental impact of our products with our suppliers",
+        "It is important to develop a mutual understanding of responsibilities regarding environmental performance with our customers",
+        "It is important to work together to reduce environmental impact of our activities with our customers",
+        "It is important to conduct joint planning to anticipate and resolve environmental-related problems with our customers",
+        "It is important to make joint decisions about ways to reduce overall environmental impact of our products with our customers"
     ]
-    likert_scale = ['Strongly Disagree', 'Disagree', 'Somewhat Disagree', 'Neutral', 'Somewhat Agree', 'Agree', 'Strongly Agree']
+    likert_scale = ['Strongly Disagree', 'Disagree', 'Somewhat Disagree', 'Neutral', 'Somewhat Agree', 'Agree',
+                    'Strongly Agree']
     system_prompt = get_system_prompt(culture, likert_scale)
-    return _execute_questions(client, culture, "GSCS", statements, system_prompt, repeats)
+    return _execute_questions(client, culture, "GSCS", statements, system_prompt, run_number)
 
 
-def run_sdg17_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_sdg17_survey(client: LLMClient, culture: CultureType, run_number: int):
     areas = ["Global poverty", "World hunger", "Public health", "Education", "Gender equality", "Water security",
              "Renewable energies", "Economic growth", "Innovative industries", "Social inequality",
              "Sustainable cities and communities", "Consumption and production", "Climate action", "Ocean protection",
@@ -226,69 +222,66 @@ def run_sdg17_survey(client: LLMClient, culture: CultureType, repeats: int):
                     'Positive impact', 'Very positive impact']
     main_question = "How do you think AI will impact the following areas in the next 10 years?"
     system_prompt = get_system_prompt(culture, likert_scale, main_question)
-    # For this survey, the "question" in the Excel file should include the main question
-    full_questions = [f"{main_question} - {area}" for area in areas]
 
-    # We pass the areas to the LLM but save the full question text
-    results_raw = _execute_questions(client, culture, "SDG17", areas, system_prompt, repeats)
-    for i, res in enumerate(results_raw):
-        original_area_index = i // repeats
-        res["question"] = full_questions[original_area_index]
-
-    return results_raw
+    # We pass the short area names to the LLM but save the full question text in the results
+    results = _execute_questions(client, culture, "SDG17", areas, system_prompt, run_number)
+    for res in results:
+        res["question"] = f"{main_question} - {res['question']}"  # Append main question to the area name
+    return results
 
 
-def run_sdg18_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_sdg18_survey(client: LLMClient, culture: CultureType, run_number: int):
     question = "In your opinion, which of both transformations is more important? (AI vs. Sustainability)"
     likert_scale = ['1 – AI is much more important', '2 – AI is more important', '3 – AI is slightly more important',
                     '4 – Sustainability is slightly more important', '5 – Sustainability is more important',
                     '6 – Sustainability is much more important']
     system_prompt = get_system_prompt(culture, likert_scale, question)
-    return _execute_questions(client, culture, "SDG18", [question], system_prompt, repeats)
+    return _execute_questions(client, culture, "SDG18", [question], system_prompt, run_number)
 
 
-def run_sdg19_survey(client: LLMClient, culture: CultureType, repeats: int):
+def run_sdg19_survey(client: LLMClient, culture: CultureType, run_number: int):
     question = "Do you believe AI and sustainable development will become more integrated in the future?"
     likert_scale = ['Definitely not', 'Probably not', 'Possibly not', 'Possibly yes', 'Probably yes', 'Yes, for sure']
     system_prompt = get_system_prompt(culture, likert_scale, question)
-    return _execute_questions(client, culture, "SDG19", [question], system_prompt, repeats)
+    return _execute_questions(client, culture, "SDG19", [question], system_prompt, run_number)
 
 
-def run_additional_question_1(client: LLMClient, culture: CultureType, repeats: int):
+def run_additional_question_1(client: LLMClient, culture: CultureType, run_number: int):
     question = "Do you think governments, industries and organizations are doing enough to ensure AI and sustainable development go along with each other?"
     likert_scale = ['1 = Not at all', '2 = Slightly', '3 = Somewhat', '4 = Moderately', '5 = Mostly',
                     '6 = Yes, absolutely']
     system_prompt = get_system_prompt(culture, likert_scale, question)
-    return _execute_questions(client, culture, "Additional Question 1", [question], system_prompt, repeats)
+    return _execute_questions(client, culture, "Additional Question 1", [question], system_prompt, run_number)
 
 
-def run_additional_questions_2_3(client: LLMClient, culture: CultureType, repeats: int):
-    # This one is special and combines two question formats
+def run_additional_questions_2_3(client: LLMClient, culture: CultureType, run_number: int):
     results = []
     organizations = ["National universities", "International Research Organizations", "Technology companies",
                      "Government", "Non-governmental organizations (NGO)"]
 
     # Question 2
     q2_main = "Who do you think is responsible to ensure AI advancement and sustainable development go along with each other?"
-    q2_questions = [f"{q2_main} - {org}" for org in organizations]
     q2_likert = ["Responsible", "Not Responsible"]
     q2_prompt = get_system_prompt(culture, q2_likert, "For each of the following, state if they are responsible...")
-    results.extend(_execute_questions(client, culture, "Additional Question 2", organizations, q2_prompt, repeats))
+    q2_results = _execute_questions(client, culture, "Additional Question 2", organizations, q2_prompt, run_number)
+    for res in q2_results:
+        res["question"] = f"{q2_main} - {res['question']}"
+    results.extend(q2_results)
 
     # Question 3
     q3_main = "How much confidence do you have in the following to develop and use AI in the best interest of sustainable development?"
-    q3_questions = [f"{q3_main} - {org}" for org in organizations]
     q3_likert = ['1= Most likely', '2= Likely', '3=Somewhat likely', '4=Somewhat unlikely', '5=Unlikely',
                  '6=Definitely not']
     q3_prompt = get_system_prompt(culture, q3_likert, q3_main)
-    results.extend(_execute_questions(client, culture, "Additional Question 3", organizations, q3_prompt, repeats))
+    q3_results = _execute_questions(client, culture, "Additional Question 3", organizations, q3_prompt, run_number)
+    for res in q3_results:
+        res["question"] = f"{q3_main} - {res['question']}"
+    results.extend(q3_results)
 
     return results
 
 
-# --- Main Runner and File Saver  ---
-def run_survey(model: ModelType, culture: CultureType, survey_name: str, repeats: int):
-    client = LLMClient(model)
+def run_survey(client: LLMClient, culture: CultureType, survey_name: str, run_number: int):
     survey_functions = {
         "PRESOR": run_presor_survey, "AISPI": run_aispi_survey, "GSCS": run_GSCS_survey, "SDG17": run_sdg17_survey,
         "SDG18": run_sdg18_survey, "SDG19": run_sdg19_survey, "AQ1": run_additional_question_1,
@@ -297,8 +290,7 @@ def run_survey(model: ModelType, culture: CultureType, survey_name: str, repeats
     if survey_name not in survey_functions:
         raise ValueError(f"Unknown survey: {survey_name}.")
 
-    # Pass repeats to the chosen function
-    results = survey_functions[survey_name](client, culture, repeats)
+    results = survey_functions[survey_name](client, culture, run_number)
     return results
 
 
@@ -322,40 +314,48 @@ def save_results_to_excel(results, filename="survey_results.xlsx"):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Run LLM sustainability surveys with repetitions.")
+    parser = argparse.ArgumentParser(description="Run LLM sustainability surveys with full survey repetitions.")
 
-    # Argument definitions
     parser.add_argument("--model", required=True, choices=[m.value for m in ModelType], help="The LLM to use.")
     parser.add_argument("--culture", required=True, choices=[c.value for c in CultureType],
                         help="The cultural persona for the LLM.")
     parser.add_argument("--survey", required=True,
                         choices=["PRESOR", "AISPI", 'GSCS', "SDG17", "SDG18", "SDG19", "AQ1", "AQ2_3"],
                         help="The survey to run.")
-    parser.add_argument("--repeats", type=int, default=1, help="Number of times to repeat each question.")
+    parser.add_argument("--runs", type=int, default=1, help="Number of times to repeat the entire survey.")
     parser.add_argument("--output_file", default="llm_sustainability_results.xlsx",
                         help="The name of the output Excel file.")
 
     args = parser.parse_args()
 
-    # --- Execution ---
     try:
         print("=" * 60)
-        print("🚀 STARTING SURVEY RUN")
+        print("🚀 INITIALIZING SURVEY SESSION")
         print(f"  - Model:         {args.model}")
         print(f"  - Culture:       {args.culture}")
         print(f"  - Survey:        {args.survey}")
-        print(f"  - Repetitions:   {args.repeats}")
+        print(f"  - Total Runs:    {args.runs}")
         print(f"  - Output File:   {args.output_file}")
         print("=" * 60)
 
         selected_model = ModelType(args.model)
         selected_culture = CultureType(args.culture)
 
-        survey_results = run_survey(selected_model, selected_culture, args.survey, args.repeats)
+        all_results = []
+        client = LLMClient(selected_model)  # Initialize client once
 
-        save_results_to_excel(survey_results, filename=args.output_file)
+        # The main loop for repeating the entire survey
+        for i in range(1, args.runs + 1):
+            print(f"\n--- Starting Run {i} of {args.runs} ---")
 
-        print("\n🎉 Run complete.")
+            # Execute one full survey
+            single_run_results = run_survey(client, selected_culture, args.survey, run_number=i)
+            all_results.extend(single_run_results)
+
+            print(f"--- Finished Run {i} of {args.runs} ---")
+
+        save_results_to_excel(all_results, filename=args.output_file)
+        print("\n🎉 Session complete.")
 
     except (ValueError, KeyError) as e:
         print(f"\n❌ Error: {e}")
