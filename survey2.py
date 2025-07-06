@@ -23,6 +23,7 @@ class LLMClient:
         self.model_name = model_type.value
         api_key_map = {
             ModelType.GPT_4o: ("OPENAI_API_KEY", "OpenAI"),
+            ModelType.GPT_4o_MINI: ("OPENAI_API_KEY", "OpenAI"),
             ModelType.CLAUDE_3_7_SONNET: ("ANTHROPIC_API_KEY", "Anthropic"),
             ModelType.DEEPSEEK_V2: ("DEEPSEEK_API_KEY", "DeepSeek"),
         }
@@ -31,7 +32,7 @@ class LLMClient:
         if not self.api_key:
             raise ValueError(f"API key for {provider_name} not found. Please add {env_key} to your .env file.")
 
-        if self.model_type == ModelType.GPT_4o:
+        if self.model_type in [ModelType.GPT_4o, ModelType.GPT_4o_MINI]:
             self.client = openai.OpenAI(api_key=self.api_key)
         elif self.model_type == ModelType.CLAUDE_3_7_SONNET:
             self.client = anthropic.Anthropic(api_key=self.api_key)
@@ -43,7 +44,7 @@ class LLMClient:
         Gets a single response from the configured LLM.
         """
         try:
-            if self.model_type in [ModelType.GPT_4o, ModelType.DEEPSEEK_V2]:
+            if self.model_type in [ModelType.GPT_4o, ModelType.GPT_4o_MINI, ModelType.DEEPSEEK_V2]:
                 response = self.client.chat.completions.create(
                     model=self.model_name,
                     messages=[
@@ -81,6 +82,7 @@ class CultureType(Enum):
 
 class ModelType(Enum):
     GPT_4o = "gpt-4o"
+    GPT_4o_MINI = "gpt-4o-mini"
     CLAUDE_3_7_SONNET = "claude-3-5-sonnet-20240620"
     DEEPSEEK_V2 = "deepseek-chat"
 
@@ -223,10 +225,9 @@ def run_sdg17_survey(client: LLMClient, culture: CultureType, run_number: int):
     main_question = "How do you think AI will impact the following areas in the next 10 years?"
     system_prompt = get_system_prompt(culture, likert_scale, main_question)
 
-    # We pass the short area names to the LLM but save the full question text in the results
     results = _execute_questions(client, culture, "SDG17", areas, system_prompt, run_number)
     for res in results:
-        res["question"] = f"{main_question} - {res['question']}"  # Append main question to the area name
+        res["question"] = f"{main_question} - {res['question']}"
     return results
 
 
@@ -259,7 +260,6 @@ def run_additional_questions_2_3(client: LLMClient, culture: CultureType, run_nu
     organizations = ["National universities", "International Research Organizations", "Technology companies",
                      "Government", "Non-governmental organizations (NGO)"]
 
-    # Question 2
     q2_main = "Who do you think is responsible to ensure AI advancement and sustainable development go along with each other?"
     q2_likert = ["Responsible", "Not Responsible"]
     q2_prompt = get_system_prompt(culture, q2_likert, "For each of the following, state if they are responsible...")
@@ -268,7 +268,6 @@ def run_additional_questions_2_3(client: LLMClient, culture: CultureType, run_nu
         res["question"] = f"{q2_main} - {res['question']}"
     results.extend(q2_results)
 
-    # Question 3
     q3_main = "How much confidence do you have in the following to develop and use AI in the best interest of sustainable development?"
     q3_likert = ['1= Most likely', '2= Likely', '3=Somewhat likely', '4=Somewhat unlikely', '5=Unlikely',
                  '6=Definitely not']
@@ -323,10 +322,17 @@ if __name__ == '__main__':
                         choices=["PRESOR", "AISPI", 'GSCS', "SDG17", "SDG18", "SDG19", "AQ1", "AQ2_3"],
                         help="The survey to run.")
     parser.add_argument("--runs", type=int, default=1, help="Number of times to repeat the entire survey.")
-    parser.add_argument("--output_file", default="llm_sustainability_results.xlsx",
-                        help="The name of the output Excel file.")
+    # The --output_file argument is removed.
 
     args = parser.parse_args()
+
+    # --- MODIFIED SECTION START ---
+    # Sanitize model name for use in filename (replaces characters like '/' with '_')
+    sanitized_model_name = args.model.replace('/', '_')
+
+    # Dynamically generate the filename
+    output_filename = f"{sanitized_model_name}_{args.survey}_{args.culture}_{args.runs}runs.xlsx"
+    # --- MODIFIED SECTION END ---
 
     try:
         print("=" * 60)
@@ -335,26 +341,22 @@ if __name__ == '__main__':
         print(f"  - Culture:       {args.culture}")
         print(f"  - Survey:        {args.survey}")
         print(f"  - Total Runs:    {args.runs}")
-        print(f"  - Output File:   {args.output_file}")
+        print(f"  - Output File:   {output_filename}")  # <-- MODIFIED
         print("=" * 60)
 
         selected_model = ModelType(args.model)
         selected_culture = CultureType(args.culture)
 
         all_results = []
-        client = LLMClient(selected_model)  # Initialize client once
+        client = LLMClient(selected_model)
 
-        # The main loop for repeating the entire survey
         for i in range(1, args.runs + 1):
             print(f"\n--- Starting Run {i} of {args.runs} ---")
-
-            # Execute one full survey
             single_run_results = run_survey(client, selected_culture, args.survey, run_number=i)
             all_results.extend(single_run_results)
-
             print(f"--- Finished Run {i} of {args.runs} ---")
 
-        save_results_to_excel(all_results, filename=args.output_file)
+        save_results_to_excel(all_results, filename=output_filename)  # <-- MODIFIED
         print("\n🎉 Session complete.")
 
     except (ValueError, KeyError) as e:
