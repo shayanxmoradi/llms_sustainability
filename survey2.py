@@ -25,7 +25,7 @@ class LLMClient:
             ModelType.GPT_4o: ("OPENAI_API_KEY", "OpenAI"),
             ModelType.GPT_4o_MINI: ("OPENAI_API_KEY", "OpenAI"),
             ModelType.CLAUDE_3_7_SONNET: ("ANTHROPIC_API_KEY", "Anthropic"),
-            ModelType.DEEPSEEK_V2: ("DEEPSEEK_API_KEY", "DeepSeek"),
+            ModelType.DEEPSEEK_V3: ("DEEPSEEK_API_KEY", "DeepSeek"),  # <-- MODIFIED
         }
         env_key, provider_name = api_key_map.get(self.model_type)
         self.api_key = os.getenv(env_key)
@@ -36,7 +36,7 @@ class LLMClient:
             self.client = openai.OpenAI(api_key=self.api_key)
         elif self.model_type == ModelType.CLAUDE_3_7_SONNET:
             self.client = anthropic.Anthropic(api_key=self.api_key)
-        elif self.model_type == ModelType.DEEPSEEK_V2:
+        elif self.model_type == ModelType.DEEPSEEK_V3:  # <-- MODIFIED
             self.client = openai.OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com/v1")
 
     def get_response(self, system_prompt: str, user_prompt: str) -> str:
@@ -44,7 +44,7 @@ class LLMClient:
         Gets a single response from the configured LLM.
         """
         try:
-            if self.model_type in [ModelType.GPT_4o, ModelType.GPT_4o_MINI, ModelType.DEEPSEEK_V2]:
+            if self.model_type in [ModelType.GPT_4o, ModelType.GPT_4o_MINI, ModelType.DEEPSEEK_V3]:  # <-- MODIFIED
                 response = self.client.chat.completions.create(
                     model=self.model_name,
                     messages=[
@@ -84,7 +84,7 @@ class ModelType(Enum):
     GPT_4o = "gpt-4o"
     GPT_4o_MINI = "gpt-4o-mini"
     CLAUDE_3_7_SONNET = "claude-3-5-sonnet-20240620"
-    DEEPSEEK_V2 = "deepseek-chat"
+    DEEPSEEK_V3 = "deepseek-chat"  # <-- MODIFIED (Using the new variable name but the correct API model ID)
 
 
 def get_system_prompt(culture_type: CultureType, likert_scale: list, main_question: str = None) -> str:
@@ -297,19 +297,11 @@ def save_results_to_excel(results, filename="survey_results.xlsx"):
     if not results:
         print("No results to save.")
         return
-    new_data_df = pd.DataFrame(results)
-    if os.path.exists(filename):
-        try:
-            existing_data_df = pd.read_excel(filename)
-            combined_df = pd.concat([existing_data_df, new_data_df], ignore_index=True)
-        except Exception as e:
-            print(f"Could not read existing Excel file {filename}. Error: {e}")
-            filename = filename.replace(".xlsx", f"_{pd.Timestamp.now().strftime('%Y%m%d%H%M%S')}.xlsx")
-            combined_df = new_data_df
-    else:
-        combined_df = new_data_df
-    combined_df.to_excel(filename, index=False)
-    print(f"\n✅ Results successfully saved to {filename}")
+    long_df = pd.DataFrame(results)
+    wide_df = long_df.pivot(index='run_number', columns='question', values='response')
+    final_df = wide_df.reset_index()
+    final_df.to_excel(filename, index=False)
+    print(f"\n✅ Results successfully saved in wide format to {filename}")
 
 
 if __name__ == '__main__':
@@ -322,17 +314,11 @@ if __name__ == '__main__':
                         choices=["PRESOR", "AISPI", 'GSCS', "SDG17", "SDG18", "SDG19", "AQ1", "AQ2_3"],
                         help="The survey to run.")
     parser.add_argument("--runs", type=int, default=1, help="Number of times to repeat the entire survey.")
-    # The --output_file argument is removed.
 
     args = parser.parse_args()
 
-    # --- MODIFIED SECTION START ---
-    # Sanitize model name for use in filename (replaces characters like '/' with '_')
     sanitized_model_name = args.model.replace('/', '_')
-
-    # Dynamically generate the filename
     output_filename = f"{sanitized_model_name}_{args.survey}_{args.culture}_{args.runs}runs.xlsx"
-    # --- MODIFIED SECTION END ---
 
     try:
         print("=" * 60)
@@ -341,7 +327,7 @@ if __name__ == '__main__':
         print(f"  - Culture:       {args.culture}")
         print(f"  - Survey:        {args.survey}")
         print(f"  - Total Runs:    {args.runs}")
-        print(f"  - Output File:   {output_filename}")  # <-- MODIFIED
+        print(f"  - Output File:   {output_filename}")
         print("=" * 60)
 
         selected_model = ModelType(args.model)
@@ -356,7 +342,7 @@ if __name__ == '__main__':
             all_results.extend(single_run_results)
             print(f"--- Finished Run {i} of {args.runs} ---")
 
-        save_results_to_excel(all_results, filename=output_filename)  # <-- MODIFIED
+        save_results_to_excel(all_results, filename=output_filename)
         print("\n🎉 Session complete.")
 
     except (ValueError, KeyError) as e:
