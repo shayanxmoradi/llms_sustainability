@@ -170,7 +170,7 @@ def _execute_questions(client: LLMClient, culture: CultureType, survey_name: str
     return results
 
 
-# --- Simplified Survey Functions ---
+
 def run_presor_survey(client: LLMClient, culture: CultureType, repeats: int):
     statements = [
         "Social responsibility and profitability can be compatible.",
