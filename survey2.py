@@ -240,6 +240,9 @@ def run_sdg18_survey(client: LLMClient, culture: CultureType, run_number: int):
     return _execute_questions(client, culture, "SDG18", [question], system_prompt, run_number)
 
 
+
+
+
 def run_sdg19_survey(client: LLMClient, culture: CultureType, run_number: int):
     question = "Do you believe AI and sustainable development will become more integrated in the future?"
     likert_scale = ['Definitely not', 'Probably not', 'Possibly not', 'Possibly yes', 'Probably yes', 'Yes, for sure']
