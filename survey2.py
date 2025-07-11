@@ -324,7 +324,7 @@ if __name__ == '__main__':
     output_filename = f"{sanitized_model_name}_{args.survey}_{args.culture}_{args.runs}runs.xlsx"
 
     try:
-        print("=" * 60)
+        print("=" * 50)
         print("🚀 INITIALIZING SURVEY SESSION")
         print(f"  - Model:         {args.model}")
         print(f"  - Culture:       {args.culture}")
