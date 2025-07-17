@@ -13,10 +13,8 @@ import openai
 import anthropic
 
 
+
 class LLMClient:
-    """
-    Handles API calls to different LLM providers.
-    """
 
     def __init__(self, model_type: 'ModelType'):
         self.model_type = model_type
