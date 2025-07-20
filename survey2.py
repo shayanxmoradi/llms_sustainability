@@ -13,7 +13,6 @@ import openai
 import anthropic
 
 
-
 class LLMClient:
 
     def __init__(self, model_type: 'ModelType'):
@@ -23,7 +22,9 @@ class LLMClient:
             ModelType.GPT_4o: ("OPENAI_API_KEY", "OpenAI"),
             ModelType.GPT_4o_MINI: ("OPENAI_API_KEY", "OpenAI"),
             ModelType.CLAUDE_3_7_SONNET: ("ANTHROPIC_API_KEY", "Anthropic"),
-            ModelType.DEEPSEEK_V3: ("DEEPSEEK_API_KEY", "DeepSeek"),  # <-- MODIFIED
+            ModelType.CLAUDE_3_SONNET: ("ANTHROPIC_API_KEY", "Anthropic"), # <-- MODIFIED
+            ModelType.CLAUDE_3_HAIKU: ("ANTHROPIC_API_KEY", "Anthropic"),   # <-- MODIFIED
+            ModelType.DEEPSEEK_V3: ("DEEPSEEK_API_KEY", "DeepSeek"),
         }
         env_key, provider_name = api_key_map.get(self.model_type)
         self.api_key = os.getenv(env_key)
@@ -32,9 +33,12 @@ class LLMClient:
 
         if self.model_type in [ModelType.GPT_4o, ModelType.GPT_4o_MINI]:
             self.client = openai.OpenAI(api_key=self.api_key)
-        elif self.model_type == ModelType.CLAUDE_3_7_SONNET:
+        # --- MODIFIED SECTION START ---
+        # Group all Claude models together as they use the same client
+        elif self.model_type in [ModelType.CLAUDE_3_7_SONNET, ModelType.CLAUDE_3_SONNET, ModelType.CLAUDE_3_HAIKU]:
             self.client = anthropic.Anthropic(api_key=self.api_key)
-        elif self.model_type == ModelType.DEEPSEEK_V3:  # <-- MODIFIED
+        # --- MODIFIED SECTION END ---
+        elif self.model_type == ModelType.DEEPSEEK_V3:
             self.client = openai.OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com/v1")
 
     def get_response(self, system_prompt: str, user_prompt: str) -> str:
@@ -42,7 +46,7 @@ class LLMClient:
         Gets a single response from the configured LLM.
         """
         try:
-            if self.model_type in [ModelType.GPT_4o, ModelType.GPT_4o_MINI, ModelType.DEEPSEEK_V3]:  # <-- MODIFIED
+            if self.model_type in [ModelType.GPT_4o, ModelType.GPT_4o_MINI, ModelType.DEEPSEEK_V3]:
                 response = self.client.chat.completions.create(
                     model=self.model_name,
                     messages=[
@@ -53,8 +57,9 @@ class LLMClient:
                     temperature=0.7,
                 )
                 return response.choices[0].message.content.strip()
-
-            elif self.model_type == ModelType.CLAUDE_3_7_SONNET:
+            # --- MODIFIED SECTION START ---
+            # Group all Claude models together as they use the same API call structure
+            elif self.model_type in [ModelType.CLAUDE_3_7_SONNET, ModelType.CLAUDE_3_SONNET, ModelType.CLAUDE_3_HAIKU]:
                 response = self.client.messages.create(
                     model=self.model_name,
                     system=system_prompt,
@@ -65,6 +70,7 @@ class LLMClient:
                     temperature=0.7,
                 )
                 return response.content[0].text.strip()
+            # --- MODIFIED SECTION END ---
         except Exception as e:
             print(f"    ! API Error: {e}. Waiting 5 seconds before retrying...")
             time.sleep(5)
@@ -81,8 +87,12 @@ class CultureType(Enum):
 class ModelType(Enum):
     GPT_4o = "gpt-4o"
     GPT_4o_MINI = "gpt-4o-mini"
-    CLAUDE_3_7_SONNET = "claude-3-5-sonnet-20240620"
-    DEEPSEEK_V3 = "deepseek-chat"  # <-- MODIFIED (Using the new variable name but the correct API model ID)
+    # --- MODIFIED SECTION START ---
+    CLAUDE_3_7_SONNET = "claude-3-5-sonnet-20240620" # This is Claude 3.5 Sonnet
+    CLAUDE_3_SONNET = "claude-3-sonnet-20240229"      # This is Claude 3 Sonnet
+    CLAUDE_3_HAIKU = "claude-3-haiku-20240307"        # This is Claude 3 Haiku
+    # --- MODIFIED SECTION END ---
+    DEEPSEEK_V3 = "deepseek-chat"
 
 
 def get_system_prompt(culture_type: CultureType, likert_scale: list, main_question: str = None) -> str:
@@ -238,9 +248,6 @@ def run_sdg18_survey(client: LLMClient, culture: CultureType, run_number: int):
     return _execute_questions(client, culture, "SDG18", [question], system_prompt, run_number)
 
 
-
-
-
 def run_sdg19_survey(client: LLMClient, culture: CultureType, run_number: int):
     question = "Do you believe AI and sustainable development will become more integrated in the future?"
     likert_scale = ['Definitely not', 'Probably not', 'Possibly not', 'Possibly yes', 'Probably yes', 'Yes, for sure']
@@ -322,7 +329,7 @@ if __name__ == '__main__':
     output_filename = f"{sanitized_model_name}_{args.survey}_{args.culture}_{args.runs}runs.xlsx"
 
     try:
-        print("=" * 50)
+        print("=" * 60)
         print("🚀 INITIALIZING SURVEY SESSION")
         print(f"  - Model:         {args.model}")
         print(f"  - Culture:       {args.culture}")
